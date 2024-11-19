@@ -8,6 +8,7 @@ module systolic_array_exp #(
     input logic clk,
     input logic reset,
     input logic doProcess,
+    input real factorial_arr [0:K], // Factorial terms for each column
     input real data_in [0:N-1], // Input column vector
     output real exp_out [0:N-1], // Output exponent approximation
     output real exp_sum_out     // Output row-wise accumulated sum
@@ -24,7 +25,7 @@ module systolic_array_exp #(
         for (genvar i = 0; i < N; i++) begin : boundary
             assign x_wire[i][0] = data_in[i]; // Data input to the leftmost column
             assign x_pow_wire[i][0] = 1.0;          // x^0 = 1.0
-            assign taylor_approx_wire[i][0] = x_wire[i][0] * x_pow_wire[i][0];  // Initial Taylor approximation
+            assign taylor_approx_wire[i][0] = 1.0;  // Initial Taylor approximation
         end
     endgenerate
 
@@ -38,7 +39,7 @@ module systolic_array_exp #(
                 .clk(clk),
                 .reset(reset),
                 .doProcess(doProcess),
-                .k_factorial(j + 1),                      // Factorial term
+                .k_factorial(factorial_arr[j+1]),                      // Factorial term
                 .x_in(x_wire[i][j]),                  // Data input from the left
                 .x_pow_in(x_pow_wire[i][j]),             // x^k input
                 .taylor_approx_in(taylor_approx_wire[i][j]), // Taylor sum from the left

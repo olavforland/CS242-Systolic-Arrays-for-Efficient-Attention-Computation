@@ -6,7 +6,7 @@ module pe_exp #(
     input logic clk,
     input logic reset,
     input logic doProcess,
-    input int k_factorial,               // Factorial term of current iteration
+    input real k_factorial,               // Factorial term of current iteration
     input real x_in,                // Number to be exponentiated
     input real x_pow_in,            // Number to be exponentiated to the power of k
     input real taylor_approx_in,    // Cumulative sum of the Taylor series
