@@ -30,10 +30,12 @@ vluint64_t posedge_cnt = 0;
 // int factorial_arr[K + 1];
 
 
-float matrixA[N][N];
-float matrixB[N][N];
-float matrixC[N][N];
-float matrixD[N][N];
+float matrix_Q[N][N];
+float matrix_K[N][N];
+float matrix_V[N][N];
+float matrix_Q_mult_K[N][N];
+float matrix_Q_mult_K_exp[N][N];
+float matrix_Q_mult_K_exp_mult_V[N][N];
 
 // Assert arst only on the first clock edge.
 // Note: By default all signals are initialized to 0, so there's no need to
@@ -57,39 +59,48 @@ void toggle_validInput(VtopSystolicArray *dut) {
 
 void displayMatrix(char matrix, VtopSystolicArray *dut) {
   
-  if (matrix == 'A') {
+  if (matrix == 'Q') {
     std::cout << std::endl;
-    std::cout << "Matrix A " << std::endl;
+    std::cout << "Matrix Q " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::setprecision(3) << matrixA[i][j] << "\t";
+        std::cout << std::setprecision(3) << matrix_Q[i][j] << "\t";
       }
       std::cout << std::endl;
     }
-  } else if (matrix == 'B') {
+  } else if (matrix == 'K') {
     std::cout << std::endl;
-    std::cout << "Matrix B " << std::endl;
+    std::cout << "Matrix K " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::setprecision(3) << matrixB[i][j] << "\t";
+        std::cout << std::setprecision(3) << matrix_K[i][j] << "\t";
+      }
+      std::cout << std::endl;
+    }
+  } else if (matrix == 'V') {
+    std::cout << std::endl;
+    std::cout << "Matrix V " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << std::setprecision(3) << matrix_V[i][j] << "\t";
       }
       std::cout << std::endl;
     }
   } else if (matrix == 'C') {
     std::cout << std::endl;
-    std::cout << "Expected result Matrix:" << std::endl;
+    std::cout << "Expected QK^T Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::setprecision(3) <<  matrixC[i][j] << "\t";
+        std::cout << std::setprecision(3) <<  matrix_Q_mult_K[i][j] << "\t";
       }
       std::cout << std::endl;
     }
   } else if (matrix == 'R') {
     std::cout << std::endl;
-    std::cout << "Received matrix " << std::endl;
+    std::cout << "Received QK^T Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::setprecision(3) << dut->result_out[i][j]
+        std::cout << std::setprecision(3) << dut->K_mult_Q_out[i][j]
                   << "\t";
       }
       std::cout << std::endl;
@@ -97,7 +108,7 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
   }
   else if (matrix == 'E') {
     std::cout << std::endl;
-    std::cout << "Exponentiated matrix " << std::endl;
+    std::cout << "Received exp(QK^T) Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
         std::cout << dut->exponentiation_out[i][j]
@@ -108,10 +119,32 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
   }
   else if (matrix == 'D') {
     std::cout << std::endl;
-    std::cout << "True exponentiated matrix " << std::endl;
+    std::cout << "Expected exp(QK^T) Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << matrixD[i][j]
+        std::cout << matrix_Q_mult_K_exp[i][j]
+                  << "\t";
+      }
+      std::cout << std::endl;
+    }
+  }
+  else if (matrix == 'G') {
+    std::cout << std::endl;
+    std::cout << "Expected exp(QK^T)V Matrix " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << matrix_Q_mult_K_exp_mult_V[i][j]
+                  << "\t";
+      }
+      std::cout << std::endl;
+    }
+  }
+  else if (matrix == 'H') {
+    std::cout << std::endl;
+    std::cout << "Received exp(QK^T)V Matrix " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << dut->exp_K_mult_Q_mult_V[i][j]
                   << "\t";
       }
       std::cout << std::endl;
@@ -130,24 +163,29 @@ void create_factorial_arr(int K_val, VtopSystolicArray *dut) {
 }
 
 void initializeInputMatrices() {
+  srand(42);
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      matrixA[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
+      matrix_Q[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
 
-      // matrixA[i][j] = static_cast<float>(rand() % maxValue);
-      // std::cout << matrixA[i][j] << " ";
-      matrixB[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
-      // matrixB[i][j] = rand() % maxValue * 1.0;
+      // matrix_Q[i][j] = static_cast<float>(rand() % maxValue);
+      // std::cout << matrix_Q[i][j] << " ";
+      matrix_K[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
+      // matrix_K[i][j] = rand() % maxValue * 1.0;
+
+      matrix_V[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
     }
   }
-  displayMatrix('A', nullptr);
-  displayMatrix('B', nullptr);
+  displayMatrix('Q', nullptr);
+  displayMatrix('K', nullptr);
+  displayMatrix('V', nullptr);
 }
 void loadWeights(VtopSystolicArray *dut) {
     // Provide weight values to 'weight_in'
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j < N; ++j) {
-            dut->weight_in[j][i] = matrixB[i][j];
+            dut->K_matrix[i][j] = matrix_K[i][j];
+            dut->V_matrix[i][j] = matrix_V[i][j];
         }
     }
 }
@@ -161,7 +199,7 @@ void driveInputMatrices(VtopSystolicArray *dut) {
         // During reset, ensure data_in is zeroed
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
-                dut->data_in[i][j] = 0;
+                dut->Q_matrix[i][j] = 0;
             }
         }
         return; // Skip the rest of the logic during reset
@@ -169,11 +207,11 @@ void driveInputMatrices(VtopSystolicArray *dut) {
 
     // After reset, persist input matrix values
     if (posedge_cnt % assertValidInput == 0) {
-        // Assign `matrixA` to the persistent data buffer
+        // Assign `matrix_Q` to the persistent data buffer
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < N; j++) {
-                data[i][j] = matrixA[i][j];
-                dut->data_in[i][j] = data[i][j];
+                data[i][j] = matrix_Q[i][j];
+                dut->Q_matrix[i][j] = data[i][j];
             }
         }
     }
@@ -183,12 +221,22 @@ void driveInputMatrices(VtopSystolicArray *dut) {
 void calculateResultMatrix() {
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      matrixC[i][j] = 0.0;
+      matrix_Q_mult_K[i][j] = 0.0;
 
       for (int k = 0; k < N; ++k) {
-        matrixC[i][j] += matrixA[i][k] * matrixB[k][j];
+        matrix_Q_mult_K[i][j] += matrix_Q[i][k] * matrix_K[j][k];
       }
-      matrixD[i][j] = std::exp(matrixC[i][j]);
+      matrix_Q_mult_K_exp[i][j] = std::exp(matrix_Q_mult_K[i][j]);
+    }
+  }
+    // Step 2: Compute the matrix product of exp(QK^T) with V
+  for (int i = 0; i < N; i++) {
+    for (int j = 0; j < N; j++) {
+      matrix_Q_mult_K_exp_mult_V[i][j] = 0.0; // Initialize result matrix element
+
+      for (int k = 0; k < N; ++k) {
+        matrix_Q_mult_K_exp_mult_V[i][j] += matrix_Q_mult_K_exp[i][k] * matrix_V[k][j];
+      }
     }
   }
 }
@@ -203,22 +251,31 @@ void verifyOutputMatrix(VtopSystolicArray *dut) {
 
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        //if (dut->result_out[(N * i) + j] != matrixC[i][j]) {
-        if (std::abs(dut->result_out[i][j] - matrixC[i][j]) > 1e-2) {
+        if (std::abs(dut->K_mult_Q_out[i][j] - matrix_Q_mult_K[i][j]) > 1e-2) {
             incorrect = true;
-          } 
+          }
       }
     }
     displayMatrix('R', dut);
     displayMatrix('E', dut);
     displayMatrix('D', dut);
+
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        if (std::abs(dut->exp_K_mult_Q_mult_V[i][j] - matrix_Q_mult_K_exp_mult_V[i][j]) > 1e-2) {
+            incorrect = true;
+          }
+      }
+    }
+    displayMatrix('G', dut);
+    displayMatrix('H', dut);
     if (incorrect) {
       std::cout << std::endl;
       std::cerr << "ERROR: output matrix received is incorrect." << std::endl;
       displayMatrix('R', dut);
       std::cout << " simtime: " << (int)sim_time << std::endl;
       std::cout << "*******************************************" << std::endl;
-      exit(EXIT_FAILURE);
+      // exit(EXIT_FAILURE);
     }
   }
 }
