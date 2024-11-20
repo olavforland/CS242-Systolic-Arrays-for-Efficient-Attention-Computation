@@ -8,15 +8,17 @@ module topSystolicArray #(
     input logic clk,
     input logic reset,
     input logic valid_input,
-    input real weight_in [0:N-1][0:N-1],  // Weight input for each PE
+    input real K_matrix [0:N-1][0:N-1],  // K matrix input
     input real factorial_arr [0:K],  // Weight input for each PE
-    input real data_in   [0:N-1][0:N-1],  // Input data matrix
-    output real result_out[0:N-1][0:N-1],  // Result output
+    input real Q_matrix   [0:N-1][0:N-1],  // Q matrix input
+    input real V_matrix  [0:N-1][0:N-1],  // V matrix input
+    output real K_mult_Q_out[0:N-1][0:N-1],  // Result output
     output real exponentiation_out[0:N-1][0:N-1], // Result exponentiation of matrix
+    output real exp_K_mult_Q_mult_V[0:N-1][0:N-1],  // Result output
     output logic valid_result
 );
     // Control Counter Logic
-    localparam int unsigned MULT_CYCLES = 3*N+2+K;
+    localparam int unsigned MULT_CYCLES = 4*N+2+K;
 
     int unsigned counter_q, counter_d;
 
@@ -97,7 +99,7 @@ module topSystolicArray #(
       end else if (doProcess_d) begin
         for (int j = 0; j < N; j++) begin
           if ($signed(counter_d) - $signed(j) >= 0 && $signed(counter_d) - $signed(j) < N) begin
-              data_in_array[j] <= data_in[counter_d - j][j];
+              data_in_array[j] <= Q_matrix[counter_d - j][j];
           end else begin
               data_in_array[j] <= '0;
           end
@@ -105,16 +107,25 @@ module topSystolicArray #(
       end
     end
 
+    real K_matrix_in [0:N-1][0:N-1];
+    always_comb begin
+        for (int i = 0; i < N; i++) begin
+            for (int j = 0; j < N; j++) begin
+                K_matrix_in[i][j] = K_matrix[N-1-i][j];
+            end
+        end
+    end
+
     real intermediate_result [0:N-1];
     // Instantiate the weight-stationary systolic array
     systolic_array #(
         .N(N)
-    ) u_systolicArray (
+    ) K_mult_Q_systolicArray (
         .clk(clk),
         .reset(reset),
         .weight_load_enable(weight_load_enable_q),
         .doProcess(doProcess_q),
-        .weight_in(weight_in),
+        .weight_in(K_matrix_in),
         .data_in(data_in_array),
         .result_out(intermediate_result)
     );
@@ -135,38 +146,72 @@ module topSystolicArray #(
         .exp_sum_out(exp_sum_out)    // Output row-wise accumulated sum
     );
 
-    // Collect outputs over time
+    real data_in_v [0:N-1];
+    real v_intermediate_result [0:N-1];
+
+    always_comb begin
+        for (int i = 0; i < N; i++) begin
+            data_in_v[i] = exp_out[N-1-i];
+        end
+    end
+
+    real weight_V_matrix [0:N-1][0:N-1];
+    always_comb begin
+        for (int i = 0; i < N; i++) begin
+            for (int j = 0; j < N; j++) begin
+                weight_V_matrix[i][j] = V_matrix[j][N-1-i]; // Rotate 90 degrees counterclockwise
+                // weight_V_matrix[j][i] = V_matrix[i][j];
+            end
+        end
+    end
+    systolic_array #(
+        .N(N)
+    ) V_mult_systolicArray (
+        .clk(clk),
+        .reset(reset),
+        .weight_load_enable(weight_load_enable_q),
+        .doProcess(doProcess_q),
+        .weight_in(weight_V_matrix),
+        .data_in(data_in_v),
+        .result_out(v_intermediate_result)
+    );
+
+    // Collect intermediate result of QK^T
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
                 if (counter_q == N + 1 + i + j) begin
-                    result_out[j][N - 1 - i] <= intermediate_result[N-1-i]; //exp_out[N-1-i];
+                    K_mult_Q_out[j][i] <= intermediate_result[N-1-i]; //exp_out[N-1-i];
                 end
             end
         end
     end
 
-        // Collect outputs over time
+    // Collect intermeditate result of exp(QK^T)
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
                 if (counter_q == N + 1 + i + j + K) begin
-                    exponentiation_out[j][N - 1 - i] <= exp_out[N-1-i];
+                    exponentiation_out[j][i] <= exp_out[N-1-i];
                 end
             end
         end
     end
-    // always_comb begin
-    //         exp_sum_out = 0;
-    // end
+    // Collect intermediate results of exp(QK^T)V
+    always_ff @(posedge clk) begin
+        for (int i = 0; i < N; i++) begin
+            for (int j = 0; j < N; j++) begin
+                if (counter_q == 2*N +2 + i + j + K) begin
+                    exp_K_mult_Q_mult_V[j][i] <= v_intermediate_result[N-1-i];
+                end
+            end
+        end
+    end
 
-//     always_ff @(posedge clk) begin
-//       if (reset) begin
-//           // Reset behavior (optional for debugging)
-//       end else begin
-//             $display("exp_sum_out = %f", exp_sum_out);
-//     end
-// end
+
+    
+
+
 
 
 endmodule

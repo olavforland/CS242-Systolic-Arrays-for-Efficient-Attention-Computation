@@ -6,7 +6,7 @@ PARAM_HEADER=params.h
 
 # Parameters to pass (default values; override via command line)
 N ?= 4
-K ?= 5
+K ?= 10
 
 .PHONY: all
 all: clean gen_params_header verilate build sim waves
