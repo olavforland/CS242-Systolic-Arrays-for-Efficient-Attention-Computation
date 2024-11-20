@@ -6,6 +6,7 @@ PARAM_HEADER=params.h
 
 # Parameters to pass (default values; override via command line)
 N ?= 4
+K ?= 5
 
 .PHONY: all
 all: clean gen_params_header verilate build sim waves
@@ -18,6 +19,7 @@ $(PARAM_HEADER):
 	@echo "#ifndef PARAMS_H" >> $@
 	@echo "#define PARAMS_H" >> $@
 	@echo "#define N $(N)" >> $@
+	@echo "#define K $(K)" >> $@
 	@echo "#endif // PARAMS_H" >> $@
 
 .PHONY: verilate
@@ -50,7 +52,7 @@ waveform.vcd: ./obj_dir/V$(TOP_MODULE)
 	@echo "### VERILATING ###"
 	verilator -Wall --trace --x-assign unique --x-initial unique -cc -I../rtl/ \
 		$(RTL_PATH)/$(TOP_MODULE).sv --exe tb_$(TOP_MODULE).cpp \
-		-GN=$(N)
+		-GN=$(N) -GK=$(K)
 	@touch .stamp.verilate
 
 .PHONY: lint

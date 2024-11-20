@@ -2,18 +2,21 @@
 `default_nettype none
 
 module topSystolicArray #(
-    parameter int unsigned N = 4
+    parameter int unsigned N = 4,
+    parameter int unsigned K = 4
 )(
     input logic clk,
     input logic reset,
     input logic valid_input,
     input real weight_in [0:N-1][0:N-1],  // Weight input for each PE
+    input real factorial_arr [0:K],  // Weight input for each PE
     input real data_in   [0:N-1][0:N-1],  // Input data matrix
     output real result_out[0:N-1][0:N-1],  // Result output
+    output real exponentiation_out[0:N-1][0:N-1], // Result exponentiation of matrix
     output logic valid_result
 );
     // Control Counter Logic
-    localparam int unsigned MULT_CYCLES = 3*N+2;
+    localparam int unsigned MULT_CYCLES = 3*N+2+K;
 
     int unsigned counter_q, counter_d;
 
@@ -115,17 +118,18 @@ module topSystolicArray #(
         .data_in(data_in_array),
         .result_out(intermediate_result)
     );
-
+    /* verilator lint_off UNUSEDSIGNAL */
     real exp_out [0:N-1];
     real exp_sum_out;
 
     systolic_array_exp #(
-        .K(1),  // Number of Taylor terms (columns)
+        .K(K),  // Number of Taylor terms (columns)
         .N(N)   // Number of rows
     ) exp_systolic_array (
         .clk(clk),
         .reset(reset),
         .doProcess(doProcess_q),
+        .factorial_arr(factorial_arr), // Factorial terms for each column
         .data_in(intermediate_result), // Input column vector
         .exp_out(exp_out),           // Output exponent approximation
         .exp_sum_out(exp_sum_out)    // Output row-wise accumulated sum
@@ -135,20 +139,34 @@ module topSystolicArray #(
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == N + 1 + i + j+1) begin
-                    result_out[j][N - 1 - i] <= exp_out[N-1-i];
+                if (counter_q == N + 1 + i + j) begin
+                    result_out[j][N - 1 - i] <= intermediate_result[N-1-i]; //exp_out[N-1-i];
                 end
             end
         end
     end
 
+        // Collect outputs over time
     always_ff @(posedge clk) begin
-      if (reset) begin
-          // Reset behavior (optional for debugging)
-      end else begin
-          $display("exp_sum_out = %f", exp_sum_out);
+        for (int i = 0; i < N; i++) begin
+            for (int j = 0; j < N; j++) begin
+                if (counter_q == N + 1 + i + j + K) begin
+                    exponentiation_out[j][N - 1 - i] <= exp_out[N-1-i];
+                end
+            end
+        end
     end
-end
+    // always_comb begin
+    //         exp_sum_out = 0;
+    // end
+
+//     always_ff @(posedge clk) begin
+//       if (reset) begin
+//           // Reset behavior (optional for debugging)
+//       end else begin
+//             $display("exp_sum_out = %f", exp_sum_out);
+//     end
+// end
 
 
 endmodule

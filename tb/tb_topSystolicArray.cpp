@@ -19,16 +19,21 @@
 
 
 // Max value of an element.
-const int maxValue = std::pow(2, 8);
+const float maxValue = 1.0f; //static_cast<float>(std::pow(2, 8));
 // Number of clk cycles before validInput should be asserted.
 const int assertValidInput = (3 * N) + 3;
 
 vluint64_t sim_time = 0;
 vluint64_t posedge_cnt = 0;
 
-uint8_t matrixA[N][N];
-uint8_t matrixB[N][N];
-uint32_t matrixC[N][N];
+// Factorial array
+// int factorial_arr[K + 1];
+
+
+float matrixA[N][N];
+float matrixB[N][N];
+float matrixC[N][N];
+float matrixD[N][N];
 
 // Assert arst only on the first clock edge.
 // Note: By default all signals are initialized to 0, so there's no need to
@@ -51,12 +56,13 @@ void toggle_validInput(VtopSystolicArray *dut) {
 }
 
 void displayMatrix(char matrix, VtopSystolicArray *dut) {
+  
   if (matrix == 'A') {
     std::cout << std::endl;
     std::cout << "Matrix A " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::hex << static_cast<int>(matrixA[i][j]) << "\t";
+        std::cout << std::setprecision(3) << matrixA[i][j] << "\t";
       }
       std::cout << std::endl;
     }
@@ -65,7 +71,7 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
     std::cout << "Matrix B " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::hex << static_cast<int>(matrixB[i][j]) << "\t";
+        std::cout << std::setprecision(3) << matrixB[i][j] << "\t";
       }
       std::cout << std::endl;
     }
@@ -74,7 +80,7 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
     std::cout << "Expected result Matrix:" << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::hex << static_cast<int>(matrixC[i][j]) << "\t";
+        std::cout << std::setprecision(3) <<  matrixC[i][j] << "\t";
       }
       std::cout << std::endl;
     }
@@ -83,20 +89,55 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
     std::cout << "Received matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::hex << static_cast<int>(dut->result_out[i][j])
+        std::cout << std::setprecision(3) << dut->result_out[i][j]
                   << "\t";
       }
       std::cout << std::endl;
     }
   }
+  else if (matrix == 'E') {
+    std::cout << std::endl;
+    std::cout << "Exponentiated matrix " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << dut->exponentiation_out[i][j]
+                  << "\t";
+      }
+      std::cout << std::endl;
+    }
+  }
+  else if (matrix == 'D') {
+    std::cout << std::endl;
+    std::cout << "True exponentiated matrix " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << matrixD[i][j]
+                  << "\t";
+      }
+      std::cout << std::endl;
+    }
+  }
+  
 }
 
+void create_factorial_arr(int K_val, VtopSystolicArray *dut) {
+  int fact = 1;
+  dut->factorial_arr[0] = 1;
+  for (int i = 1; i <= K; i++) {
+    fact = fact * i;
+    dut->factorial_arr[i] = fact;
+  }
+}
 
 void initializeInputMatrices() {
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      matrixA[i][j] = rand() % maxValue;
-      matrixB[i][j] = rand() % maxValue;
+      matrixA[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
+
+      // matrixA[i][j] = static_cast<float>(rand() % maxValue);
+      // std::cout << matrixA[i][j] << " ";
+      matrixB[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
+      // matrixB[i][j] = rand() % maxValue * 1.0;
     }
   }
   displayMatrix('A', nullptr);
@@ -114,7 +155,7 @@ void loadWeights(VtopSystolicArray *dut) {
 
 void driveInputMatrices(VtopSystolicArray *dut) {
     // Persistent input matrix storage
-    static int data[N][N] = {0}; // Keeps track of the current state of inputs
+    static float data[N][N] = {0}; // Keeps track of the current state of inputs
 
     if (sim_time < RESET_NEG_EDGE) {
         // During reset, ensure data_in is zeroed
@@ -142,11 +183,12 @@ void driveInputMatrices(VtopSystolicArray *dut) {
 void calculateResultMatrix() {
   for (int i = 0; i < N; i++) {
     for (int j = 0; j < N; j++) {
-      matrixC[i][j] = 0;
+      matrixC[i][j] = 0.0;
 
       for (int k = 0; k < N; ++k) {
         matrixC[i][j] += matrixA[i][k] * matrixB[k][j];
       }
+      matrixD[i][j] = std::exp(matrixC[i][j]);
     }
   }
 }
@@ -162,12 +204,14 @@ void verifyOutputMatrix(VtopSystolicArray *dut) {
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
         //if (dut->result_out[(N * i) + j] != matrixC[i][j]) {
-        if (dut->result_out[i][j] != matrixC[i][j]) {
-          incorrect = true;
-        }
+        if (std::abs(dut->result_out[i][j] - matrixC[i][j]) > 1e-2) {
+            incorrect = true;
+          } 
       }
     }
     displayMatrix('R', dut);
+    displayMatrix('E', dut);
+    displayMatrix('D', dut);
     if (incorrect) {
       std::cout << std::endl;
       std::cerr << "ERROR: output matrix received is incorrect." << std::endl;
@@ -187,6 +231,7 @@ int main(int argc, char **argv, char **env) {
 
   // Initialize matrices
   initializeInputMatrices();
+  create_factorial_arr(K, dut);
   calculateResultMatrix(); // Precompute the expected result
   loadWeights(dut);
 
@@ -208,7 +253,6 @@ int main(int argc, char **argv, char **env) {
 
     if (dut->clk == 1) {
       posedge_cnt++;
-
       toggle_validInput(dut);
       driveInputMatrices(dut);
       verifyOutputMatrix(dut);
