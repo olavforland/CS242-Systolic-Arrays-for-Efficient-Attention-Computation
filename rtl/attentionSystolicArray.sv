@@ -1,7 +1,7 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
-module topSystolicArray #(
+module attentionSystolicArray #(
     parameter int unsigned N = 4,
     parameter int unsigned K = 4
 )(
@@ -12,13 +12,17 @@ module topSystolicArray #(
     input real factorial_arr [0:K],  // Weight input for each PE
     input real Q_matrix   [0:N-1][0:N-1],  // Q matrix input
     input real V_matrix  [0:N-1][0:N-1],  // V matrix input
-    output real K_mult_Q_out[0:N-1][0:N-1],  // Result output
-    output real exponentiation_out[0:N-1][0:N-1], // Result exponentiation of matrix
+    /* verilator lint_off UNDRIVEN */
+    output real Q_mult_K[0:N-1][0:N-1],  // Result output
+    /* verilator lint_off UNDRIVEN */
+    output real exp_Q_mult_K[0:N-1][0:N-1], // Result exponentiation of matrix
+    /* verilator lint_off UNDRIVEN */
     output real exp_K_mult_Q_mult_V[0:N-1][0:N-1],  // Result output
+    output real attention[0:N-1][0:N-1], // Result output
     output logic valid_result
 );
     // Control Counter Logic
-    localparam int unsigned MULT_CYCLES = 4*N+2+K;
+    localparam int unsigned MULT_CYCLES = 4*N+1+K;
 
     int unsigned counter_q, counter_d;
 
@@ -99,8 +103,10 @@ module topSystolicArray #(
       end else if (doProcess_d) begin
         for (int j = 0; j < N; j++) begin
           if ($signed(counter_d) - $signed(j) >= 0 && $signed(counter_d) - $signed(j) < N) begin
+              // Skew Q_matrix and read each row into data_in_array
               data_in_array[j] <= Q_matrix[counter_d - j][j];
           end else begin
+              // Add 0 padding
               data_in_array[j] <= '0;
           end
         end
@@ -108,6 +114,7 @@ module topSystolicArray #(
     end
 
     real K_matrix_in [0:N-1][0:N-1];
+    // K matrix is loaded into weights upside down
     always_comb begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
@@ -116,7 +123,8 @@ module topSystolicArray #(
         end
     end
 
-    real intermediate_result [0:N-1];
+    // Intermediate result of QK^T
+    real Q_mult_K_result [0:N-1];
     // Instantiate the weight-stationary systolic array
     systolic_array #(
         .N(N)
@@ -127,11 +135,13 @@ module topSystolicArray #(
         .doProcess(doProcess_q),
         .weight_in(K_matrix_in),
         .data_in(data_in_array),
-        .result_out(intermediate_result)
+        .result_out(Q_mult_K_result)
     );
-    /* verilator lint_off UNUSEDSIGNAL */
-    real exp_out [0:N-1];
-    real exp_sum_out;
+
+    // Intermediate result of exp(QK^T)
+    real exp_Q_mult_K_result [0:N-1];
+    // Row-wise normalizer in the softmax function
+    real softmax_norm;
 
     systolic_array_exp #(
         .K(K),  // Number of Taylor terms (columns)
@@ -141,29 +151,30 @@ module topSystolicArray #(
         .reset(reset),
         .doProcess(doProcess_q),
         .factorial_arr(factorial_arr), // Factorial terms for each column
-        .data_in(intermediate_result), // Input column vector
-        .exp_out(exp_out),           // Output exponent approximation
-        .exp_sum_out(exp_sum_out)    // Output row-wise accumulated sum
+        .data_in(Q_mult_K_result), // Input column vector
+        .exp_out(exp_Q_mult_K_result),           // Output exponent approximation
+        .exp_sum_out(softmax_norm)    // Output row-wise accumulated sum
     );
 
+    // Corner turning before V matrix multiplication
     real data_in_v [0:N-1];
-    real v_intermediate_result [0:N-1];
-
     always_comb begin
         for (int i = 0; i < N; i++) begin
-            data_in_v[i] = exp_out[N-1-i];
+            data_in_v[i] = exp_Q_mult_K_result[N-1-i];
         end
     end
 
+    // Weight matrix for V matrix multiplication (must be rotated 90 degrees for correctness)
     real weight_V_matrix [0:N-1][0:N-1];
     always_comb begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
                 weight_V_matrix[i][j] = V_matrix[j][N-1-i]; // Rotate 90 degrees counterclockwise
-                // weight_V_matrix[j][i] = V_matrix[i][j];
             end
         end
     end
+    // Intermediate result of exp(QK^T)V
+    real exp_Q_mult_K_mult_V_result [0:N-1];
     systolic_array #(
         .N(N)
     ) V_mult_systolicArray (
@@ -173,15 +184,29 @@ module topSystolicArray #(
         .doProcess(doProcess_q),
         .weight_in(weight_V_matrix),
         .data_in(data_in_v),
-        .result_out(v_intermediate_result)
+        .result_out(exp_Q_mult_K_mult_V_result)
+    );
+
+    // Final result of Attention(Q, K, V)
+    real attention_result [0:N-1];
+    // Systolic array for row-wise normalization
+    systolic_array_norm #(
+        .N(N)
+    ) softmax_norm_systolic_array (
+        .clk(clk),
+        .reset(reset),
+        .doProcess(doProcess_q),
+        .norm_in(softmax_norm),
+        .data_in(exp_Q_mult_K_mult_V_result),
+        .data_normed_out(attention_result)
     );
 
     // Collect intermediate result of QK^T
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == N + 1 + i + j) begin
-                    K_mult_Q_out[j][i] <= intermediate_result[N-1-i]; //exp_out[N-1-i];
+                if (counter_q == N + i + j) begin
+                    Q_mult_K[j][i] <= Q_mult_K_result[N-1-i]; //exp_out[N-1-i];
                 end
             end
         end
@@ -191,26 +216,33 @@ module topSystolicArray #(
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == N + 1 + i + j + K) begin
-                    exponentiation_out[j][i] <= exp_out[N-1-i];
+                if (counter_q == N + i + j + K) begin
+                    exp_Q_mult_K[j][i] <= exp_Q_mult_K_result[N-1-i];
                 end
             end
         end
     end
+    
     // Collect intermediate results of exp(QK^T)V
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == 2*N +2 + i + j + K) begin
-                    exp_K_mult_Q_mult_V[j][i] <= v_intermediate_result[N-1-i];
+                if (counter_q == 2*N + i + j + K) begin
+                    exp_K_mult_Q_mult_V[j][i] <= exp_Q_mult_K_mult_V_result[N-1-i];
                 end
             end
         end
     end
-
-
-    
-
+    // Collect intermediate results of Attention(Q, K, V)
+    always_ff @(posedge clk) begin
+        for (int i = 0; i < N; i++) begin
+            for (int j = 0; j < N; j++) begin
+                if (counter_q == 2*N + i + j + K + 1) begin
+                    attention[j][i] <= attention_result[N-1-i];
+                end
+            end
+        end
+    end
 
 
 
