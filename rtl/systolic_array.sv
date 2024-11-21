@@ -55,18 +55,25 @@ module systolic_array #(
         end
     endgenerate
 
-    // Collect outputs over time
-    always_ff @(posedge clk) begin
-        if (reset) begin
-            for (int i = 0; i < N; i++) begin
-                result_out[i] <= '0;
-            end
-        end else begin
-            for (int i = 0; i < N; i++) begin
-                result_out[i] <= partial_sum_wire[i][N];
-            end
+    generate
+        for (genvar i = 0; i < N; i++) begin : result
+            assign result_out[i] = partial_sum_wire[i][N];
         end
-    end
+    endgenerate
+        
+
+    // // Collect outputs over time
+    // always_ff @(posedge clk) begin
+    //     if (reset) begin
+    //         for (int i = 0; i < N; i++) begin
+    //             result_out[i] <= '0;
+    //         end
+    //     end else begin
+    //         for (int i = 0; i < N; i++) begin
+    //             result_out[i] <= partial_sum_wire[i][N];
+    //         end
+    //     end
+    // end
 
 endmodule
 
