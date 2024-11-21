@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <vector>
 
-#include "VtopSystolicArray.h" // Verilated DUT.
+#include "VattentionSystolicArray.h" // Verilated DUT.
 #include <verilated.h>         // Common verilator routines.
 #include <verilated_vcd_c.h>   // Write waverforms to a VCD file.
 
@@ -36,11 +36,13 @@ float matrix_V[N][N];
 float matrix_Q_mult_K[N][N];
 float matrix_Q_mult_K_exp[N][N];
 float matrix_Q_mult_K_exp_mult_V[N][N];
+float matrix_attention_norm[N];
+float matrix_attention[N][N];
 
 // Assert arst only on the first clock edge.
 // Note: By default all signals are initialized to 0, so there's no need to
 // drive the other inputs to '0.
-void dut_reset(VtopSystolicArray *dut) {
+void dut_reset(VattentionSystolicArray *dut) {
   dut->reset = 0;
 
   if ((sim_time > 2) && (sim_time < RESET_NEG_EDGE)) {
@@ -49,7 +51,7 @@ void dut_reset(VtopSystolicArray *dut) {
 }
 
 // Assert validInput after every 10 clk cycles (after reset).
-void toggle_validInput(VtopSystolicArray *dut) {
+void toggle_validInput(VattentionSystolicArray *dut) {
   dut->valid_input = 0;
 
   if ((posedge_cnt % assertValidInput == 0) && (sim_time >= RESET_NEG_EDGE)) {
@@ -57,7 +59,7 @@ void toggle_validInput(VtopSystolicArray *dut) {
   }
 }
 
-void displayMatrix(char matrix, VtopSystolicArray *dut) {
+void displayMatrix(char matrix, VattentionSystolicArray *dut) {
   
   if (matrix == 'Q') {
     std::cout << std::endl;
@@ -100,7 +102,7 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
     std::cout << "Received QK^T Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << std::setprecision(3) << dut->K_mult_Q_out[i][j]
+        std::cout << std::setprecision(3) << dut->Q_mult_K[i][j]
                   << "\t";
       }
       std::cout << std::endl;
@@ -111,7 +113,7 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
     std::cout << "Received exp(QK^T) Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        std::cout << dut->exponentiation_out[i][j]
+        std::cout << dut->exp_Q_mult_K[i][j]
                   << "\t";
       }
       std::cout << std::endl;
@@ -150,10 +152,33 @@ void displayMatrix(char matrix, VtopSystolicArray *dut) {
       std::cout << std::endl;
     }
   }
+  else if (matrix == 'I') {
+    std::cout << std::endl;
+    std::cout << "Expected Attention Matrix " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << matrix_attention[i][j]
+                  << "\t";
+      }
+      std::cout << std::endl;
+    }
+  }
+  else if (matrix == 'J') {
+    std::cout << std::endl;
+    std::cout << "Received Attention Matrix " << std::endl;
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        std::cout << dut->attention[i][j]
+                  << "\t";
+      }
+      std::cout << std::endl;
+    }
+  }
+
   
 }
 
-void create_factorial_arr(int K_val, VtopSystolicArray *dut) {
+void create_factorial_arr(int K_val, VattentionSystolicArray *dut) {
   int fact = 1;
   dut->factorial_arr[0] = 1;
   for (int i = 1; i <= K; i++) {
@@ -180,7 +205,7 @@ void initializeInputMatrices() {
   displayMatrix('K', nullptr);
   displayMatrix('V', nullptr);
 }
-void loadWeights(VtopSystolicArray *dut) {
+void loadWeights(VattentionSystolicArray *dut) {
     // Provide weight values to 'weight_in'
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j < N; ++j) {
@@ -191,7 +216,7 @@ void loadWeights(VtopSystolicArray *dut) {
 }
 
 
-void driveInputMatrices(VtopSystolicArray *dut) {
+void driveInputMatrices(VattentionSystolicArray *dut) {
     // Persistent input matrix storage
     static float data[N][N] = {0}; // Keeps track of the current state of inputs
 
@@ -220,6 +245,7 @@ void driveInputMatrices(VtopSystolicArray *dut) {
 
 void calculateResultMatrix() {
   for (int i = 0; i < N; i++) {
+    matrix_attention_norm[i] = 0.0;
     for (int j = 0; j < N; j++) {
       matrix_Q_mult_K[i][j] = 0.0;
 
@@ -227,6 +253,7 @@ void calculateResultMatrix() {
         matrix_Q_mult_K[i][j] += matrix_Q[i][k] * matrix_K[j][k];
       }
       matrix_Q_mult_K_exp[i][j] = std::exp(matrix_Q_mult_K[i][j]);
+      matrix_attention_norm[i] += matrix_Q_mult_K_exp[i][j];
     }
   }
     // Step 2: Compute the matrix product of exp(QK^T) with V
@@ -237,11 +264,12 @@ void calculateResultMatrix() {
       for (int k = 0; k < N; ++k) {
         matrix_Q_mult_K_exp_mult_V[i][j] += matrix_Q_mult_K_exp[i][k] * matrix_V[k][j];
       }
+      matrix_attention[i][j] = matrix_Q_mult_K_exp_mult_V[i][j] / matrix_attention_norm[i];
     }
   }
 }
 
-void verifyOutputMatrix(VtopSystolicArray *dut) {
+void verifyOutputMatrix(VattentionSystolicArray *dut) {
   if ((dut->valid_result == 1) && (sim_time >= VERIF_START_TIME)) {
     calculateResultMatrix();
     displayMatrix('C', dut);
@@ -251,14 +279,14 @@ void verifyOutputMatrix(VtopSystolicArray *dut) {
 
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
-        if (std::abs(dut->K_mult_Q_out[i][j] - matrix_Q_mult_K[i][j]) > 1e-2) {
+        if (std::abs(dut->Q_mult_K[i][j] - matrix_Q_mult_K[i][j]) > 1e-2) {
             incorrect = true;
           }
       }
     }
     displayMatrix('R', dut);
-    displayMatrix('E', dut);
     displayMatrix('D', dut);
+    displayMatrix('E', dut);
 
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < N; j++) {
@@ -269,6 +297,16 @@ void verifyOutputMatrix(VtopSystolicArray *dut) {
     }
     displayMatrix('G', dut);
     displayMatrix('H', dut);
+
+    for (int i = 0; i < N; i++) {
+      for (int j = 0; j < N; j++) {
+        if (std::abs(dut->attention[i][j] - matrix_attention[i][j]) > 1e-2) {
+            incorrect = true;
+          }
+      }
+    }
+    displayMatrix('I', dut);
+    displayMatrix('J', dut);
     if (incorrect) {
       std::cout << std::endl;
       std::cerr << "ERROR: output matrix received is incorrect." << std::endl;
@@ -284,7 +322,7 @@ void verifyOutputMatrix(VtopSystolicArray *dut) {
 int main(int argc, char **argv, char **env) {
   srand(time(NULL));
   Verilated::commandArgs(argc, argv);
-  VtopSystolicArray *dut = new VtopSystolicArray; // Instantiate DUT.
+  VattentionSystolicArray *dut = new VattentionSystolicArray; // Instantiate DUT.
 
   // Initialize matrices
   initializeInputMatrices();

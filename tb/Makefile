@@ -1,6 +1,6 @@
 # `make all` OR `make verilate` -> `make build` -> `make sim` -> `make waves`
 
-TOP_MODULE=topSystolicArray
+TOP_MODULE=attentionSystolicArray
 RTL_PATH=../rtl
 PARAM_HEADER=params.h
 
@@ -26,7 +26,7 @@ $(PARAM_HEADER):
 verilate: gen_params_header .stamp.verilate
 
 .PHONY: build
-build: obj_dir/VtopSystolicArray
+build: obj_dir/VattentionSystolicArray
 
 .PHONY: sim
 sim: waveform.vcd
