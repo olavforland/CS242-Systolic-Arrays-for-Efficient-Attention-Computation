@@ -2,28 +2,29 @@
 `default_nettype none
 
 module systolic_array #(
-    parameter int unsigned N
+    parameter int unsigned N, // Outer dimension of weights
+    parameter int unsigned M  // Inner dimension that joins the matrices
 )(
     input logic clk,
     input logic reset,
     input logic weight_load_enable,
     input logic doProcess,
     // Weight input for each PE
-    input real weight_in [0:N-1][0:N-1],
+    input real weight_in [0:N-1][0:M-1],
     // Input for the first row of PEs
-    input real data_in [0:N-1],
+    input real data_in [0:M-1],
     // Resulting output matrix
     output real result_out [0:N-1]
 );
     // Wires for data flowing upwards
-    real data_wire [0:N][0:N-1];
+    real data_wire [0:N][0:M-1];
     
     // Wires for partial sums flowing to the right
-    real partial_sum_wire [0:N-1][0:N];
+    real partial_sum_wire [0:N-1][0:M];
 
     // Boundary conditions for data flow from the input to the first row
     generate
-        for (genvar j = 0; j < N; j++) begin : data_flow
+        for (genvar j = 0; j < M; j++) begin : data_flow
             assign data_wire[N][j] = data_in[j];
         end
     endgenerate
@@ -38,7 +39,7 @@ module systolic_array #(
     // Instantiate the PEs and connect inter-PE signals
     generate
         for (genvar i = 0; i < N; i++) begin : row
-            for (genvar j = 0; j < N; j++) begin : col
+            for (genvar j = 0; j < M; j++) begin : col
                 pe #(
                 ) pe (
                     .clk(clk),
@@ -57,23 +58,9 @@ module systolic_array #(
 
     generate
         for (genvar i = 0; i < N; i++) begin : result
-            assign result_out[i] = partial_sum_wire[i][N];
+            assign result_out[i] = partial_sum_wire[i][M];
         end
     endgenerate
-        
-
-    // // Collect outputs over time
-    // always_ff @(posedge clk) begin
-    //     if (reset) begin
-    //         for (int i = 0; i < N; i++) begin
-    //             result_out[i] <= '0;
-    //         end
-    //     end else begin
-    //         for (int i = 0; i < N; i++) begin
-    //             result_out[i] <= partial_sum_wire[i][N];
-    //         end
-    //     end
-    // end
 
 endmodule
 

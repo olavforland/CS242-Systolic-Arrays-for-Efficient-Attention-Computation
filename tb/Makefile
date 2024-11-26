@@ -6,6 +6,7 @@ PARAM_HEADER=params.h
 
 # Parameters to pass (default values; override via command line)
 N ?= 4
+d ?= 4
 K ?= 10
 
 .PHONY: all
@@ -19,6 +20,7 @@ $(PARAM_HEADER):
 	@echo "#ifndef PARAMS_H" >> $@
 	@echo "#define PARAMS_H" >> $@
 	@echo "#define N $(N)" >> $@
+	@echo "#define d $(d)" >> $@
 	@echo "#define K $(K)" >> $@
 	@echo "#endif // PARAMS_H" >> $@
 
@@ -52,7 +54,7 @@ waveform.vcd: ./obj_dir/V$(TOP_MODULE)
 	@echo "### VERILATING ###"
 	verilator -Wall --trace --x-assign unique --x-initial unique -cc -I../rtl/ \
 		$(RTL_PATH)/$(TOP_MODULE).sv --exe tb_$(TOP_MODULE).cpp \
-		-GN=$(N) -GK=$(K)
+		-GN=$(N) -Gd=$(d) -GK=$(K)
 	@touch .stamp.verilate
 
 .PHONY: lint

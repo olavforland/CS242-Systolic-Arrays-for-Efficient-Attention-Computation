@@ -3,26 +3,27 @@
 
 module attentionSystolicArray #(
     parameter int unsigned N = 4,
+    parameter int unsigned d = 4,
     parameter int unsigned K = 4
 )(
     input logic clk,
     input logic reset,
     input logic valid_input,
-    input real K_matrix [0:N-1][0:N-1],  // K matrix input
+    input real K_matrix [0:N-1][0:d-1],  // K matrix input
     input real factorial_arr [0:K],  // Weight input for each PE
-    input real Q_matrix   [0:N-1][0:N-1],  // Q matrix input
-    input real V_matrix  [0:N-1][0:N-1],  // V matrix input
+    input real Q_matrix   [0:N-1][0:d-1],  // Q matrix input
+    input real V_matrix  [0:N-1][0:d-1],  // V matrix input
     /* verilator lint_off UNDRIVEN */
     output real Q_mult_K[0:N-1][0:N-1],  // Result output
     /* verilator lint_off UNDRIVEN */
     output real exp_Q_mult_K[0:N-1][0:N-1], // Result exponentiation of matrix
     /* verilator lint_off UNDRIVEN */
-    output real exp_K_mult_Q_mult_V[0:N-1][0:N-1],  // Result output
-    output real attention[0:N-1][0:N-1], // Result output
+    output real exp_K_mult_Q_mult_V[0:N-1][0:d-1],  // Result output
+    output real attention[0:N-1][0:d-1], // Result output
     output logic valid_result
 );
     // Control Counter Logic
-    localparam int unsigned MULT_CYCLES = 4*N+1+K;
+    localparam int unsigned MULT_CYCLES = 3*N+1+K+d;
 
     int unsigned counter_q, counter_d;
 
@@ -92,16 +93,16 @@ module attentionSystolicArray #(
     assign weight_load_done = !weight_load_enable_q;
 
     // Data Input Array
-    real data_in_array [0:N-1];
+    real data_in_array [0:d-1];
 
     // Generate data_in_array based on the current counter_q value
     always_ff @(posedge clk) begin
       if (reset) begin
-        for (int j = 0; j < N; j++) begin
+        for (int j = 0; j < d; j++) begin
             data_in_array[j] <= '0;
         end
       end else if (doProcess_d) begin
-        for (int j = 0; j < N; j++) begin
+        for (int j = 0; j < d; j++) begin
           if ($signed(counter_d) - $signed(j) >= 0 && $signed(counter_d) - $signed(j) < N) begin
               // Skew Q_matrix and read each row into data_in_array
               data_in_array[j] <= Q_matrix[counter_d - j][j];
@@ -113,11 +114,11 @@ module attentionSystolicArray #(
       end
     end
 
-    real K_matrix_in [0:N-1][0:N-1];
+    real K_matrix_in [0:N-1][0:d-1];
     // K matrix is loaded into weights upside down
     always_comb begin
         for (int i = 0; i < N; i++) begin
-            for (int j = 0; j < N; j++) begin
+            for (int j = 0; j < d; j++) begin
                 K_matrix_in[i][j] = K_matrix[N-1-i][j];
             end
         end
@@ -127,7 +128,8 @@ module attentionSystolicArray #(
     real Q_mult_K_result [0:N-1];
     // Instantiate the weight-stationary systolic array
     systolic_array #(
-        .N(N)
+        .N(N),
+        .M(d)
     ) K_mult_Q_systolicArray (
         .clk(clk),
         .reset(reset),
@@ -165,18 +167,19 @@ module attentionSystolicArray #(
     end
 
     // Weight matrix for V matrix multiplication (must be rotated 90 degrees for correctness)
-    real weight_V_matrix [0:N-1][0:N-1];
+    real weight_V_matrix [0:d-1][0:N-1];
     always_comb begin
-        for (int i = 0; i < N; i++) begin
+        for (int i = 0; i < d; i++) begin
             for (int j = 0; j < N; j++) begin
-                weight_V_matrix[i][j] = V_matrix[j][N-1-i]; // Rotate 90 degrees counterclockwise
+                weight_V_matrix[i][j] = V_matrix[j][d-1-i]; // Rotate 90 degrees counterclockwise
             end
         end
     end
     // Intermediate result of exp(QK^T)V
-    real exp_Q_mult_K_mult_V_result [0:N-1];
+    real exp_Q_mult_K_mult_V_result [0:d-1];
     systolic_array #(
-        .N(N)
+        .N(d),
+        .M(N)
     ) V_mult_systolicArray (
         .clk(clk),
         .reset(reset),
@@ -188,10 +191,10 @@ module attentionSystolicArray #(
     );
 
     // Final result of Attention(Q, K, V)
-    real attention_result [0:N-1];
+    real attention_result [0:d-1];
     // Systolic array for row-wise normalization
     systolic_array_norm #(
-        .N(N)
+        .N(d)
     ) softmax_norm_systolic_array (
         .clk(clk),
         .reset(reset),
@@ -205,7 +208,7 @@ module attentionSystolicArray #(
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == N + i + j) begin
+                if (counter_q == d + i + j) begin
                     Q_mult_K[j][i] <= Q_mult_K_result[N-1-i]; //exp_out[N-1-i];
                 end
             end
@@ -216,7 +219,7 @@ module attentionSystolicArray #(
     always_ff @(posedge clk) begin
         for (int i = 0; i < N; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == N + i + j + K) begin
+                if (counter_q == d + i + j + K) begin
                     exp_Q_mult_K[j][i] <= exp_Q_mult_K_result[N-1-i];
                 end
             end
@@ -225,20 +228,20 @@ module attentionSystolicArray #(
     
     // Collect intermediate results of exp(QK^T)V
     always_ff @(posedge clk) begin
-        for (int i = 0; i < N; i++) begin
+        for (int i = 0; i < d; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == 2*N + i + j + K) begin
-                    exp_K_mult_Q_mult_V[j][i] <= exp_Q_mult_K_mult_V_result[N-1-i];
+                if (counter_q == d + N + i + j + K) begin
+                    exp_K_mult_Q_mult_V[j][i] <= exp_Q_mult_K_mult_V_result[d-1-i];
                 end
             end
         end
     end
     // Collect intermediate results of Attention(Q, K, V)
     always_ff @(posedge clk) begin
-        for (int i = 0; i < N; i++) begin
+        for (int i = 0; i < d; i++) begin
             for (int j = 0; j < N; j++) begin
-                if (counter_q == 2*N + i + j + K + 1) begin
-                    attention[j][i] <= attention_result[N-1-i];
+                if (counter_q == d + N + i + j + K + 1) begin
+                    attention[j][i] <= attention_result[d-1-i];
                 end
             end
         end

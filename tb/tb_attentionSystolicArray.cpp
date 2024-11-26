@@ -30,14 +30,14 @@ vluint64_t posedge_cnt = 0;
 // int factorial_arr[K + 1];
 
 
-float matrix_Q[N][N];
-float matrix_K[N][N];
-float matrix_V[N][N];
+float matrix_Q[N][d];
+float matrix_K[N][d];
+float matrix_V[N][d];
 float matrix_Q_mult_K[N][N];
 float matrix_Q_mult_K_exp[N][N];
-float matrix_Q_mult_K_exp_mult_V[N][N];
+float matrix_Q_mult_K_exp_mult_V[N][d];
 float matrix_attention_norm[N];
-float matrix_attention[N][N];
+float matrix_attention[N][d];
 
 // Assert arst only on the first clock edge.
 // Note: By default all signals are initialized to 0, so there's no need to
@@ -65,7 +65,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Matrix Q " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << std::setprecision(3) << matrix_Q[i][j] << "\t";
       }
       std::cout << std::endl;
@@ -74,7 +74,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Matrix K " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << std::setprecision(3) << matrix_K[i][j] << "\t";
       }
       std::cout << std::endl;
@@ -83,7 +83,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Matrix V " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << std::setprecision(3) << matrix_V[i][j] << "\t";
       }
       std::cout << std::endl;
@@ -134,7 +134,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Expected exp(QK^T)V Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << matrix_Q_mult_K_exp_mult_V[i][j]
                   << "\t";
       }
@@ -145,7 +145,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Received exp(QK^T)V Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << dut->exp_K_mult_Q_mult_V[i][j]
                   << "\t";
       }
@@ -156,7 +156,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Expected Attention Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << matrix_attention[i][j]
                   << "\t";
       }
@@ -167,7 +167,7 @@ void displayMatrix(char matrix, VattentionSystolicArray *dut) {
     std::cout << std::endl;
     std::cout << "Received Attention Matrix " << std::endl;
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         std::cout << dut->attention[i][j]
                   << "\t";
       }
@@ -190,7 +190,7 @@ void create_factorial_arr(int K_val, VattentionSystolicArray *dut) {
 void initializeInputMatrices() {
   srand(42);
   for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
+    for (int j = 0; j < d; j++) {
       matrix_Q[i][j] = static_cast<float>(rand()) / RAND_MAX * maxValue;
 
       // matrix_Q[i][j] = static_cast<float>(rand() % maxValue);
@@ -208,7 +208,7 @@ void initializeInputMatrices() {
 void loadWeights(VattentionSystolicArray *dut) {
     // Provide weight values to 'weight_in'
     for (int i = 0; i < N; ++i) {
-        for (int j = 0; j < N; ++j) {
+        for (int j = 0; j < d; ++j) {
             dut->K_matrix[i][j] = matrix_K[i][j];
             dut->V_matrix[i][j] = matrix_V[i][j];
         }
@@ -223,7 +223,7 @@ void driveInputMatrices(VattentionSystolicArray *dut) {
     if (sim_time < RESET_NEG_EDGE) {
         // During reset, ensure data_in is zeroed
         for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
+            for (int j = 0; j < d; j++) {
                 dut->Q_matrix[i][j] = 0;
             }
         }
@@ -234,7 +234,7 @@ void driveInputMatrices(VattentionSystolicArray *dut) {
     if (posedge_cnt % assertValidInput == 0) {
         // Assign `matrix_Q` to the persistent data buffer
         for (int i = 0; i < N; i++) {
-            for (int j = 0; j < N; j++) {
+            for (int j = 0; j < d; j++) {
                 data[i][j] = matrix_Q[i][j];
                 dut->Q_matrix[i][j] = data[i][j];
             }
@@ -249,7 +249,7 @@ void calculateResultMatrix() {
     for (int j = 0; j < N; j++) {
       matrix_Q_mult_K[i][j] = 0.0;
 
-      for (int k = 0; k < N; ++k) {
+      for (int k = 0; k < d; ++k) {
         matrix_Q_mult_K[i][j] += matrix_Q[i][k] * matrix_K[j][k];
       }
       matrix_Q_mult_K_exp[i][j] = std::exp(matrix_Q_mult_K[i][j]);
@@ -258,7 +258,7 @@ void calculateResultMatrix() {
   }
     // Step 2: Compute the matrix product of exp(QK^T) with V
   for (int i = 0; i < N; i++) {
-    for (int j = 0; j < N; j++) {
+    for (int j = 0; j < d; j++) {
       matrix_Q_mult_K_exp_mult_V[i][j] = 0.0; // Initialize result matrix element
 
       for (int k = 0; k < N; ++k) {
@@ -289,7 +289,7 @@ void verifyOutputMatrix(VattentionSystolicArray *dut) {
     displayMatrix('E', dut);
 
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         if (std::abs(dut->exp_K_mult_Q_mult_V[i][j] - matrix_Q_mult_K_exp_mult_V[i][j]) > 1e-2) {
             incorrect = true;
           }
@@ -299,7 +299,7 @@ void verifyOutputMatrix(VattentionSystolicArray *dut) {
     displayMatrix('H', dut);
 
     for (int i = 0; i < N; i++) {
-      for (int j = 0; j < N; j++) {
+      for (int j = 0; j < d; j++) {
         if (std::abs(dut->attention[i][j] - matrix_attention[i][j]) > 1e-2) {
             incorrect = true;
           }
