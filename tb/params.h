@@ -3,5 +3,5 @@
 #define PARAMS_H
 #define N 4
 #define d 5
-#define K 10
+#define K 20
 #endif // PARAMS_H

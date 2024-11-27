@@ -1,6 +1,7 @@
 `timescale 1ns / 1ps
 `default_nettype none
 
+
 module attentionSystolicArray #(
     parameter int unsigned N = 4,
     parameter int unsigned d = 4,
@@ -13,6 +14,7 @@ module attentionSystolicArray #(
     input real factorial_arr [0:K],  // Weight input for each PE
     input real Q_matrix   [0:N-1][0:d-1],  // Q matrix input
     input real V_matrix  [0:N-1][0:d-1],  // V matrix input
+    input real softmax_temp, // Softmax temp (1/sqrt(d))
     /* verilator lint_off UNDRIVEN */
     output real Q_mult_K[0:N-1][0:N-1],  // Result output
     /* verilator lint_off UNDRIVEN */
@@ -22,6 +24,7 @@ module attentionSystolicArray #(
     output real attention[0:N-1][0:d-1], // Result output
     output logic valid_result
 );
+
     // Control Counter Logic
     localparam int unsigned MULT_CYCLES = 3*N+1+K+d;
 
@@ -145,6 +148,13 @@ module attentionSystolicArray #(
     // Row-wise normalizer in the softmax function
     real softmax_norm;
 
+    real Q_mult_K_result_normed [0:N-1];
+    always_comb begin
+        for (int i = 0; i < N; i++) begin
+            Q_mult_K_result_normed[i] = Q_mult_K_result[i] * softmax_temp;
+        end
+    end
+
     systolic_array_exp #(
         .K(K),  // Number of Taylor terms (columns)
         .N(N)   // Number of rows
@@ -153,7 +163,7 @@ module attentionSystolicArray #(
         .reset(reset),
         .doProcess(doProcess_q),
         .factorial_arr(factorial_arr), // Factorial terms for each column
-        .data_in(Q_mult_K_result), // Input column vector
+        .data_in(Q_mult_K_result_normed), // Input column vector
         .exp_out(exp_Q_mult_K_result),           // Output exponent approximation
         .exp_sum_out(softmax_norm)    // Output row-wise accumulated sum
     );
