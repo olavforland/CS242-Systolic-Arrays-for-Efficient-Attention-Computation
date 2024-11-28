@@ -4,6 +4,9 @@ TOP_MODULE=attentionSystolicArray
 RTL_PATH=../rtl
 PARAM_HEADER=params.h
 
+COMMON_SRC = ../common/common.cpp
+
+
 # Parameters to pass (default values; override via command line)
 N ?= 4
 d ?= 4
@@ -53,8 +56,9 @@ waveform.vcd: ./obj_dir/V$(TOP_MODULE)
 	@echo
 	@echo "### VERILATING ###"
 	verilator -Wall --trace --x-assign unique --x-initial unique -cc -I../rtl/ \
-		$(RTL_PATH)/$(TOP_MODULE).sv --exe tb_$(TOP_MODULE).cpp \
-		-GN=$(N) -Gd=$(d) -GK=$(K)
+		$(RTL_PATH)/$(TOP_MODULE).sv --exe tb_$(TOP_MODULE).cpp $(COMMON_SRC) \
+		-GN=$(N) -Gd=$(d) -GK=$(K) \
+		-CFLAGS "-I../common"
 	@touch .stamp.verilate
 
 .PHONY: lint
