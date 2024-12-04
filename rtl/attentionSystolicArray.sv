@@ -3,9 +3,9 @@
 
 
 module attentionSystolicArray #(
-    parameter int unsigned N = 4,
-    parameter int unsigned d = 4,
-    parameter int unsigned K = 4
+    parameter int unsigned N,
+    parameter int unsigned d,
+    parameter int unsigned K
 )(
     input logic clk,
     input logic reset,
@@ -26,7 +26,7 @@ module attentionSystolicArray #(
 );
 
     // Control Counter Logic
-    localparam int unsigned MULT_CYCLES = 3*N+1+K+d;
+    localparam int unsigned MULT_CYCLES = 2*N+2*d+K+1;
 
     int unsigned counter_q, counter_d;
 
@@ -246,7 +246,7 @@ module attentionSystolicArray #(
             end
         end
     end
-    // Collect intermediate results of Attention(Q, K, V)
+    // Collect results of Attention(Q, K, V)
     always_ff @(posedge clk) begin
         for (int i = 0; i < d; i++) begin
             for (int j = 0; j < N; j++) begin

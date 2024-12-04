@@ -27,9 +27,9 @@ vluint64_t posedge_cnt = 0;
 // float matrix_Q[N][d];
 // float matrix_K[N][d];
 // float matrix_V[N][d];
-float matrix_Q_mult_K[N][N];
-float matrix_Q_mult_K_exp[N][N];
-float matrix_Q_mult_K_exp_mult_V[N][d];
+std::vector<std::vector<float>> matrix_Q_mult_K;
+std::vector<std::vector<float>> matrix_Q_mult_K_exp;
+std::vector<std::vector<float>> matrix_Q_mult_K_exp_mult_V;
 float matrix_attention_norm[N];
 // float matrix_attention[N][d];
 
@@ -138,7 +138,7 @@ int main(int argc, char **argv, char **env) {
     // Initialize matrices
     initializeInputMatrices(N, d, maxValue, 1.0, matrix_Q, matrix_K, matrix_V);
     create_factorial_arr(K, dut);
-    calculateResultMatrix(N, d, matrix_Q, matrix_K, matrix_V, matrix_attention);
+    calculateResultMatrix(N, d, matrix_Q, matrix_K, matrix_V, matrix_attention, matrix_Q_mult_K, matrix_Q_mult_K_exp, matrix_Q_mult_K_exp_mult_V);
 
     loadWeights(dut, N, d, matrix_K, matrix_V);
     dut->softmax_temp = (float) 1.0 / std::sqrt(d);

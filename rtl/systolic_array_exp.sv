@@ -20,6 +20,18 @@ module systolic_array_exp #(
     real taylor_approx_wire [0:N-1][0:K];  // Taylor approx flows left to right
     real accumulated_sum_wire [0:N];       // Accumulated sum flows upwards (final column only)
 
+    // real ln2 = 0.69314718056; // Precompute ln(2)
+    // real r_in [0:N-1];        // Residual values
+    // integer l_in [0:N-1];     // Integer scaling factors
+
+    // // Perform decomposition for each input value
+    // generate
+    //     for (genvar i = 0; i < N; i++) begin : decompose_input
+    //         assign l_in[i] = int'( $floor(data_in[i] / ln2) ); // // Compute l_i = floor(x_i / ln(2))
+    //         assign r_in[i] = data_in[i] - l_in[i] * ln2; // Compute r_i = x_i - l_i * ln(2)
+    //     end
+    // endgenerate
+
     // Boundary conditions for x_wire
     generate
         for (genvar i = 0; i < N; i++) begin : boundary
@@ -62,6 +74,13 @@ module systolic_array_exp #(
 
     // Assign outputs from accumulated_sum_wire (row-wise accumulated sums)
     assign exp_sum_out = accumulated_sum_wire[0];
+
+    // Combine the result of e^{r_i} with 2^{l_i}
+    // generate
+    //     for (genvar i = 0; i < N; i++) begin : combine_output
+    //         assign exp_out[i] = taylor_approx_wire[i][K] * (2.0 ** l_in[i]); // e^{x_i} = e^{r_i} * 2^{l_i}
+    //     end
+    // endgenerate
 
     generate
         for (genvar i = 0; i < N; i++) begin : assign_exp_out

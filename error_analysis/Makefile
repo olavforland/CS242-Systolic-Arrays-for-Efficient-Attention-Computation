@@ -61,7 +61,6 @@ clean:
 	rm -rf ./obj_dir
 	rm -f waveform.vcd
 	rm -f $(PARAM_HEADER)
-	rm -f results/error_results.csv
 
 .PHONY: lint
 lint:
