@@ -148,8 +148,9 @@ int main(int argc, char **argv, char **env) {
     VerilatedVcdC *m_trace = new VerilatedVcdC;
     dut->trace(m_trace, 5);
     m_trace->open("waveform.vcd");
+    bool done = false;
 
-    while (sim_time < MAX_SIM_TIME) {
+    while (sim_time < MAX_SIM_TIME && !done) {
         dut_reset(dut, sim_time);
         dut->clk ^= 1; // Toggle clk to create pos and neg edge.
         dut->eval();   // Evaluate all the signals in the DUT on each clock edge.
@@ -159,6 +160,9 @@ int main(int argc, char **argv, char **env) {
             toggle_validInput(dut, sim_time, posedge_cnt, assertValidInput, RESET_NEG_EDGE);
             driveInputMatrices(dut, sim_time, posedge_cnt, assertValidInput, RESET_NEG_EDGE, N, d, matrix_Q);
             verifyOutputMatrix(dut);
+            if (dut->valid_result == 1) {
+                done = true;
+            }
         }
 
         // Write all the traced signal values into the waveform dump file.
