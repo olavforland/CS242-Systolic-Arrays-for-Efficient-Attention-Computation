@@ -47,6 +47,21 @@ cd tb
 make all [N=N] [d=d]
 ```
 
+### 5. Run QK distribution analysis:
+
+Generates random input ids for a transformer to generate Q,K,V matrices and empircally obtain the distribution of
+$QK^\top/\sqrt{d}$ entries to further bound error of Taylor approximation.
+
+**Parameters**
+- mode: attention/qk (attention used to get distribution of attention scores, qk used to get distribution of
+$QK^\top/\sqrt{d}$)
+- model: gpt2/bert-base-uncased (default: bert-base-uncased)
+
+```
+cd qk_dist
+python3 qk_dist.py [mode] [model]
+```
+
 ## REST of README: TODO
 
 ### Systolic architectures
