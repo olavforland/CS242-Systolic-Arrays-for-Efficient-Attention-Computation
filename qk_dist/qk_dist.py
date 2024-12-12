@@ -15,7 +15,7 @@ import sys
 # Dimensions of the model
 batch_size = 64  # Number of sequences
 seq_len = 1024    # Sequence length
-num_heads = 1  # Number of attention heads
+num_heads = 12  # Number of attention heads
 
 def main():
     model_name = "bert-base-uncased"
