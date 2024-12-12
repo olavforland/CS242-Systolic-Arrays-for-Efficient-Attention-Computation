@@ -10,7 +10,7 @@ COMMON_SRC = ../common/common.cpp
 # Parameters to pass (default values; override via command line)
 N ?= 4
 d ?= 4
-K ?= 10
+K ?= 20
 
 .PHONY: all
 all: clean gen_params_header verilate build sim waves
